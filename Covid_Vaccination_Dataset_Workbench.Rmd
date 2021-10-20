@@ -1,0 +1,145 @@
+---
+title: "Vaccination and Excess Deaths during Pandemic"
+author: "Alex Popescu"
+date: "06/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+## Project Goal
+
+This data analysis looks at the relation between Covid-19 vaccinations and excess deaths during the Covid-19 pandemic in England and Wales for the period September 2020 to August 2021. While the analysis is of personal interest, the study in current form is one of my final projects for [Google Data Analytics Professional Certificate](https://www.coursera.org/professional-certificates/google-data-analytics)
+
+The dataset used in this study is a combination of data from [Office for National Statistics](https://www.ons.gov.uk/peoplepopulationandcommunity/birthsdeathsandmarriages/deaths/datasets/weeklyprovisionalfiguresondeathsregisteredinenglandandwales) (ONS) UK (weekly deaths and past 5 years average of weekly deaths) and data from [UK government open data repository](https://coronavirus.data.gov.uk) ( daily number of cases and number of vaccinations).
+
+## Data Preparation
+
+ONS publishes weekly an Excel workbook containing the weekly number of deaths in England and Wales. The data I extracted from these comprehensive datasets is the current weekly number of deaths and the previous 5-year average number of deaths for the same period. As the period of March 2021 to August 2021 coincides with the beginning of the pandemic in UK, I decided to re-use the average weekly numbers from 2019.
+
+The UK corona virus open data, among other metrics, publishes the daily number of vaccinations and daily number of new daily Covid-19 infections per each UK nation.
+
+The study is limited to the period September 2020 - August 2021. At the beginning of the pandemic, the Covid-19 testing capacity was very limited but it did grow pretty quickly so by September 2020 it would process in excess of 100000 tests a day and able to scale up to over 600000 in January 2021, as the need for tests evolved. Following on the improved testing capacity, the number of daily cases recorded by the government became more credible, therefore I could use it in the analysis.
+
+## Data Processing
+
+The ONS weekly deaths dataset uses an End_Of_Week day of Friday, so I extracted the data starting with End_Of_Week 04 September 2020 spanning to End_Of_Week 27 August 2021. Also, for the period of March 2021 to August 2021 I used the 5-year average of weekly deaths from 2019, the immediate pre-pandemic period. Also, it is worth noting that the ONS dataset I used combines data from both nations, England and Wales.
+
+The UK government open data datasets provided the daily number of cases and vaccinations (daily and cumulative) per each nation, England and Wales, so I had to combine the two datasets into one that covers both nations as per ONS dataset. As these datasets have daily data, I had to organise them per same week period as ONS dataset.
+
+The end result was a single dataset containing the following information: End of Week Date (week_end_on), Weekly Number of Cases (new_cases), Weekly Vaccination (weekly_vacc), Weekly Cumulated Vaccination (cum_vacc), Calculated Percentage of Population Vaccinated (perc_vacc), Weekly Recorded Deaths (weekly_death), the 5-year average of weekly deaths pre-pandemic (avg_5years_period_death).
+
+I have also produced a parameters dataset containing the number used for total population of England and Wales (source: ONS), the date of first vaccination and the name of the first person to receive that vaccination. 
+
+It is worth noting that the UK government open data dataset for vaccinations starts daily recordings on the 10 January 2021 with an already cumulated figure of 3,216,433, vaccinations that happened between 08 December 2020 and 10 January 2021.
+
+## Data Analysis
+
+#### Load R packages used for data analysis and vizualisation
+
+```{r libraries, message=FALSE}
+library(tidyverse)
+library(grid)
+library(ggplot2)
+library(dplyr)
+library(scales)
+```
+
+#### Load dataset
+
+Load dataset and ensure column week_end_on is formatted as date
+
+```{r data, message=FALSE}
+covid_data_raw <- read_csv("sep_2020_aug_2021_covid_data.csv")
+covid_data <- covid_data_raw %>% 
+  mutate(week_end_on = as.Date(week_end_on , format = "%d/%m/%Y"))
+
+```
+
+#### Including Charts
+
+Based on my final dataset, I charted the pandemic weekly data deaths and the pre-pandemic 5-year-average weekly deaths which showed a consistent greater deaths number during the period under observation. 
+
+```{r excess_death, message=FALSE}
+excess_death <- covid_data %>% 
+  select(week_end_on , weekly_death , avg_preCovid =avg_5years_precovid_death  ) %>% 
+  ggplot() +
+  geom_line(aes(y= weekly_death, x = week_end_on, colour ="Covid") ) +
+  geom_line(aes(y= avg_preCovid, x= week_end_on, colour= "Pre-Covid")) +
+  scale_y_continuous(limits = c(0, 20000)) +
+  theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
+  #theme(axis.text.x =  element_text(angle =45))+
+  labs(x = "Weeks", y= "Weekly Deaths") +
+  scale_color_manual(name= "Weekly Death", values = c("Covid" = "darkred", "Pre-Covid"= "steelblue")) +
+  ggtitle("Pandemic Excess Death") +
+  geom_vline(xintercept = as.numeric(covid_data[20,"week_end_on"]), color= "black")
+```
+
+I also charted the weekly covid cases for the same period and I could identify clearly two peaks caused by the two variants, alpha and delta. While the excess deaths graph clearly shows the effect of the alpha variant, the effect of the delta variant is not visible.
+
+```{r covid_cases, message=FALSE}
+weekly_cases <- covid_data %>% 
+  select(week_end_on , new_cases) %>% 
+  ggplot() +
+  geom_line(aes(y= new_cases, x = week_end_on, color= "New Cases" ))+
+  scale_color_manual(name= "Weekly Cases", values = c("New Cases"= "darkred")) +
+  theme(axis.title.x = element_blank(), axis.text.x = element_blank()) +
+  #theme(axis.text.x = element_text(angle = 45)) +
+  labs(x= "Weeks", y= "Weekly New Cases") +
+  ggtitle("Covid New Cases") +
+  scale_y_continuous(limits= c(0,450000), labels = scales::label_number_si()) +
+  geom_vline(xintercept = as.numeric(covid_data[20,"week_end_on"]), color= "black") +
+  annotate("text", x= as.Date("2021-01-01"), y= 420000, label= "Alpha Variant") +
+  annotate("text", x= as.Date("2021-07-16"), y= 350000, label= "Delta Variant")
+```
+
+Finally, I charted the vaccinated population percentage for the same period.
+
+```{r vaccination}
+perc_population_vaccinated <- covid_data %>% 
+  select(week_end_on, perc_vacc) %>% 
+  ggplot() +
+  geom_line(aes(y= perc_vacc, x= week_end_on, color= "% vaccinated")) +
+  scale_color_manual(name= "Vaccination", values= c("% vaccinated" = "darkblue")) +
+  labs(x= "Weeks", y= "% Vaccinated Population") +
+  ggtitle("% Vaccinated Population") +
+  theme(axis.text.x = element_text(angle = 45)) +
+  scale_y_continuous(labels =  label_percent(scale = 1)) +
+  geom_vline(xintercept = as.numeric(covid_data[20,"week_end_on"]), color= "black")
+```
+
+#### Note
+
+The vertical line indicates the start date of daily recorded vaccinations, 10 January 2021.
+
+## Conclusion Plot
+
+```{r fig.align='center', fig.height=10, fig.width=8}
+grid.newpage()
+
+grid.draw(rbind(ggplotGrob(excess_death), ggplotGrob(weekly_cases), ggplotGrob(perc_population_vaccinated), size="last" ))
+```
+
+## Conclusion Notes
+
+The definite conclusion of my study is that the Covid-19 vaccination definitely had a positive effect on decreasing the excess deaths in England and Wales with a remarkable impact on lowering death rate caused by the delta variant.
+
+#### Other Insights
+
+Another insight drawn from the three graphs is that England and Wales still suffer the effect of the pandemic with positive excess deaths comparing to the pre-pandemic 5-year average.  
+
+The vaccination rate has stalled a bit in the last couple of months which seems to be in line with a stubborn positive deaths rate.  
+
+There is also the possibility that the positive excess deaths rate in the last few months might be also caused by earlier vaccinations losing their high protection and maybe there is a need for a booster vaccine. These are just thoughts provoked by the three charts.  
+
+## Methodology
+
+The data was prepared and processed locally using Microsoft Excel and Google Sheets. The final dataset was loaded to RStudio Cloud, analysed and results were shared using the export to HTML from my R Markdown file, both available for downloading.
+
+
