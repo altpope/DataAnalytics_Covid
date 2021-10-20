@@ -1,5 +1,5 @@
 # DataAnalytics_Covid
-R case study of effects of Covid vaccinations on excess death in England and Wels
+R case study of effects of Covid vaccinations on excess death in England and Wales.
 
 This is a study of the effect of Covid vaccinations on excess death in England and Wales (UK) between September 2020 and August 2021. 
 
